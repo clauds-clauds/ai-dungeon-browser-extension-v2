@@ -5,12 +5,14 @@
   import { parseResponse, buildCardMap } from "@/utils/parser";
   import Highlight from "./highlight.svelte";
   import Focus from "./focus.svelte";
+  import { extensionState } from "@/utils/state.svelte";
 
   type Props = {
     rawHtml: string;
+    type: "last_action" | "story" | "action";
   };
 
-  let { rawHtml }: Props = $props();
+  let { rawHtml, type }: Props = $props();
 
   let text = $derived(DOMPurify.sanitize(rawHtml));
   let map = $state(new Map<string, StoryCard>());
@@ -19,7 +21,20 @@
     const updateCardMap = () => {
       const adventure = Storage.getSelectedAdventure();
       if (adventure) {
-        map = buildCardMap(adventure.storyCards);
+        const allCards = buildCardMap(adventure.storyCards);
+        const filtered = new Map<string, StoryCard>();
+
+        for (const [trigger, card] of allCards) {
+          if (card.limit === "none") {
+            filtered.set(trigger, card);
+          } else if (card.limit === "story_only" && (type === "last_action" || type === "story")) {
+            filtered.set(trigger, card);
+          } else if (card.limit === "action_only" && type === "action") {
+            filtered.set(trigger, card);
+          }
+        }
+
+        map = filtered;
       } else {
         map = new Map();
       }
@@ -44,7 +59,7 @@
   });
 </script>
 
-<Focus /><span>
+{#if type === "last_action"}<Focus />{/if}<span>
   {#each chunks as chunk, i (i)}
     {#if chunk.type === "card"}
       <Highlight card={chunk.card} text={chunk.content} />

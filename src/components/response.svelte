@@ -30,18 +30,18 @@
       {#if chunk.card.limit === "none" || (type === ResponseType.Action && chunk.card.limit === "action_only") || (type !== ResponseType.Action && chunk.card.limit === "story_only")}
         <Highlight card={chunk.card} text={chunk.content} />
       {:else}
-        {chunk.content}
+        {@html chunk.content}
       {/if}
     {:else if chunk.type === "bold"}
-      <b>{chunk.content}</b>
+      <b>{@html chunk.content}</b>
     {:else if chunk.type === "italic"}
-      <em>{chunk.content}</em>
+      <em>{@html chunk.content}</em>
     {:else if chunk.type === "underline"}
-      <u>{chunk.content}</u>
+      <u>{@html chunk.content}</u>
     {:else if chunk.type === "strikethrough"}
-      <s>{chunk.content}</s>
+      <s>{@html chunk.content}</s>
     {:else}
-      {chunk.content}
+      {@html chunk.content}
     {/if}
   {/each}
 </span>

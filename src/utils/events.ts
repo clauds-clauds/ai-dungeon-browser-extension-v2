@@ -1,85 +1,87 @@
-import { Config } from "./config";
-import { Debug } from "./debug";
-import { DOM } from "./dom";
-import { Storage } from "./storage";
+/**
+ * Empty for now...
+ */
+class LEEvents {
+  /**
+   * The **MutationObserver** for DOM changes.
+   */
+  #observer: MutationObserver | null = null;
 
-export class Events {
-  private static _observer: MutationObserver;
-  private static _gameplayOutput: HTMLElement | null = null;
+  /**
+   * The output **HTMLElement** on which AI Dungeon writes its content.
+   */
+  #output: HTMLElement | null = null;
 
-  static async onStart() {
-    Debug.log("Loading storage...");
-    await Storage.load();
-    Storage.listen();
-    Debug.log("Storage loaded!");
+  /**
+   * Whether to apply logic for AI Dungeon adventures.
+   */
+  #applyDungeonEffects: boolean = false;
 
-    Storage.selectedAdventureId.subscribe((adventureId) => {
-      extensionState.focusCardId = null;
+  /**
+   * `onWake` is called when the extension starts up.
+   */
+  async onWake() {
+    // Create a single observer for the entire document.
+    this.#observer = new MutationObserver((mutations) => {
+      this.onGenericMutations(mutations);
+      this.onDungeonMutations(mutations);
     });
 
-    Debug.log("Creating observers...");
-    this._observer = new MutationObserver((mutations) => {
-      this.onMutate(mutations);
-    });
-    Debug.log("Observers created!");
+    // Start observing the document thing for changes.
+    this.#observer.observe(document.body, { childList: true, subtree: true });
 
-    Debug.log("Starting observer...");
-    this._observer.observe(document.body, { childList: true, subtree: true });
-    Debug.log("Observer started!");
+    // Print success message.
+    debug.success(true, "DOM observer set up!");
   }
 
-  static onMutate(mutations: MutationRecord[]) {
-    if (Debug.getAdventureId() === "") {
-      this.onInvalidate();
-      return;
-    }
-
-    DOM.injectButton();
-
-    if (this._gameplayOutput) {
-      DOM.prettifyButBetter(this._gameplayOutput);
-      return;
-    }
-
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (node instanceof HTMLElement) {
-          if (node.matches(Config.SELECTOR_OUTPUT)) {
-            this._gameplayOutput = node;
-            Debug.log("Gameplay output found!");
-            break;
-          }
-
-          const foundElement = node.querySelector(Config.SELECTOR_OUTPUT);
-          if (foundElement instanceof HTMLElement) {
-            this._gameplayOutput = foundElement;
-            Debug.log("Gameplay output found!");
-            break;
-          }
-        }
-      }
-    }
-
-    /*
-    for (const mutation of mutations) {
-      for (const node of mutation.addedNodes) {
-        if (!(node instanceof HTMLElement)) continue;
-
-        const responses =
-          node.id === Config.ID_RESPONSE
-            ? [node]
-            : (Array.from(node.querySelectorAll(Config.SELECTOR_RESPONSE)) as HTMLElement[]);
-
-        if (responses.length > 0) DOM.prettify(responses);
-      }
-    }*/
+  /**
+   * `onGenericMutations` is called for generic mutation events.
+   * @param mutations The mutation records.
+   */
+  onGenericMutations(mutations: MutationRecord[]) {
+    dom.addDevButton();
   }
 
-  static onInvalidate() {
-    this._gameplayOutput = null;
-    AudioManager.stop();
-    focusAudioState.reset();
-    extensionState.focusCardId = null;
-    DOM.cleanup();
+  /**
+   * `onDungeonMutations` is called to modify AI Dungeon stuff.
+   * @param mutations The mutation records.
+   */
+  onDungeonMutations(mutations: MutationRecord[]) {
+    // Skip invalid adventures.
+    if (!query.adventureId()) {
+      if (this.#applyDungeonEffects) this.onDungeonCleanup();
+      return;
+    } else {
+      if (!this.#applyDungeonEffects) debug.success(true, "You entered an adventure!");
+      this.#applyDungeonEffects = true;
+    }
+
+    // Add the buttons for the image editor and the normal editor.
+    // This is added to the flamey in-game menu thingamabob.
+    dom.addButtons();
+
+    // If the output is already set then skip searching for it.
+    if (this.#output) {
+      dom.prettify(this.#output);
+    } else {
+      // Try to find the gameplay output element.
+      this.#output = query.gameplayOutput();
+
+      // Print a success message if we found it.
+      if (this.#output) {
+        debug.success(true, "The gameplay output has been discovered!");
+      }
+    }
+  }
+
+  /**
+   * `onDungeonCleanup` is called to clean up AI Dungeon related stuff.
+   */
+  onDungeonCleanup() {
+    debug.warn(true, "You left an adventure!");
+    this.#applyDungeonEffects = false;
+    this.#output = null;
   }
 }
+
+export const events = new LEEvents();

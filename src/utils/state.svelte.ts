@@ -1,7 +1,17 @@
-import { Tab } from "./types";
+export const editorState = $state({
+  open: true,
+  tab: "",
+});
 
-export const extensionState = $state({
-  isEditorOpen: false,
-  editorTab: Tab.Adventure,
-  focusCardId: null as string | null,
+export const cardEditorState = $state({
+  open: false,
+  cardId: null as string | null,
+});
+
+export const imageGenerationState = $state({
+  open: false,
+});
+
+export const focusState = $state({
+  card: null as VisualCard | null,
 });

@@ -1,23 +1,23 @@
 import { defineConfig } from "wxt";
-import tailwindcss from "@tailwindcss/vite";
 
+// See https://wxt.dev/api/config.html
 export default defineConfig({
   srcDir: "src",
-  modules: ["@wxt-dev/module-svelte"],
+  modules: ["@wxt-dev/module-svelte", "@wxt-dev/unocss"],
   manifest: {
-    name: "Dungeon Extension v2",
-    description: "Enhance AI Dungeon with visuals, audio effects, and text formatting",
+    name: "Dungeon Extension V3",
+    description: "Customize your AI Dungeon experience with fancy colors, icons and more!",
+    version: "0.1.0",
     permissions: ["storage", "unlimitedStorage"],
-    version: "1.0.3",
     web_accessible_resources: [
       {
         resources: ["fonts/*"],
-        matches: ["https://play.aidungeon.com/*", "https://beta.aidungeon.com/*", "https://alpha.aidungeon.com/*"],
+        matches: ["https://*.aidungeon.com/*"],
       },
     ],
     browser_specific_settings: {
       gecko: {
-        id: "dungeon-extension-v2@clauds-clauds",
+        id: "dungeon-extension-v3@clauds.dev",
         // @ts-expect-error
         data_collection_permissions: {
           required: ["none"],
@@ -25,7 +25,7 @@ export default defineConfig({
       },
     },
   },
-  vite: () => ({
-    plugins: [tailwindcss()],
-  }),
+  webExt: {
+    disabled: true,
+  },
 });

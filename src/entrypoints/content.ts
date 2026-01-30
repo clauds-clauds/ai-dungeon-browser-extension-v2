@@ -1,58 +1,39 @@
-import { Debug } from "#imports";
-import appStyle from "@/app.css?inline";
-import contentStyle from "@/content.css?inline";
-import Editor from "@/routes/editor.svelte";
-import { Events } from "@/utils/events";
-import { mount, unmount } from "svelte";
+// UnoCSS stuff here!
+import "virtual:uno.css";
+
+// Svelte stuff here!
+import { mount } from "svelte";
+
+// Components here!
+import Sonner from "@/components/sonner.svelte";
+
+// App stuff here!
+import Editor from "@/app/editor.svelte";
+import ImageGen from "@/app/image_gen.svelte";
 
 export default defineContentScript({
-  matches: ["https://play.aidungeon.com/*", "https://beta.aidungeon.com/*", "https://alpha.aidungeon.com/*"],
+  matches: ["https://*.aidungeon.com/*"],
   cssInjectionMode: "ui",
   async main(ctx) {
-    // Inject content styles omitting the base overrides stuff.
-    const style = document.createElement("style");
-    style.textContent = contentStyle;
-    style.id = "de-content";
-    document.head.appendChild(style);
-
-    // Do the startup events.
-    await Events.onStart();
-
-    Debug.log("Creating shadow root UI...");
+    debug.log(false, "Content script starting...");
+    events.onWake();
     const ui = await createShadowRootUi(ctx, {
-      name: "de-editor-anchor",
+      name: "le-ui",
       position: "inline",
       anchor: "body",
-      css: appStyle,
+      onMount: (container, shadow) => {
+        debug.log(false, "Adding fonts to shadow DOM...");
+        dom.addFonts(shadow);
 
-      onMount(uiContainer) {
-        // Inject custom fonts in to the shadow root.
-        const plexFont = browser.runtime.getURL("/fonts/plex_sans.ttf");
-        const symbolFont = browser.runtime.getURL("/fonts/material_symbols.ttf");
-        const fontStyle = document.createElement("style");
-        fontStyle.textContent = `
-          @font-face {
-            font-family: 'Material Symbols';
-            src: url('${symbolFont}') format('truetype');
-            font-variation-settings: "FILL" 1;
-          }
-    
-          @font-face {
-            font-family: 'IBM Plex Sans';
-            src: url('${plexFont}') format('truetype');
-          }
-        `;
-        document.head.appendChild(fontStyle);
+        // For the theming.
+        settings.subscribe((s) => container.style.setProperty("--le-color-brand", s.developerThemeColor));
 
-        // Mount Svelte stuff.
-        const app = mount(Editor, { target: uiContainer });
-        return app;
-      },
-      onRemove: (app) => {
-        if (app) unmount(app);
+        mount(Sonner, { target: container, props: { preset: "dev" } }); // Mount the sonner.
+        mount(Editor, { target: container }); // Mount the normal editor.
+        mount(ImageGen, { target: container }); // Mount the image generator.
       },
     });
     ui.mount();
-    Debug.log("Shadow root UI mounted!");
+    // debug.welcome();
   },
 });

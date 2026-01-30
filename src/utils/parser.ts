@@ -1,97 +1,91 @@
-import type { TextChunk, StoryCard } from "./types";
 import { get } from "svelte/store";
-import { settings } from "./storage";
+import type { Chunk, VisualCard } from "./types";
 
-export function parseResponse(text: string, cardMap: Map<string, StoryCard>): TextChunk[] {
-  if (!text) return [];
+/**
+ * Empty for now...
+ */
+class LEParser {
+  /**
+   *
+   */
+  #categorize(match: string, markdown: boolean, map: Map<string, VisualCard>): Chunk {
+    // Again, I hate switch statements with a passion.
+    if (markdown) {
+      // Bold formatting.
+      if ((match.startsWith("**") && match.endsWith("**")) || (match.startsWith("__") && match.endsWith("__"))) {
+        return { type: "bold", text: match.slice(2, -2) };
+      }
 
-  const chunks: TextChunk[] = [];
+      // Strikethrough formatting.
+      if (match.startsWith("~~") && match.endsWith("~~")) {
+        return { type: "strikethrough", text: match.slice(2, -2) };
+      }
 
-  const cardKeys = Array.from(cardMap.keys()).sort((a, b) => b.length - a.length);
-  const escapedKeys = cardKeys.map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+      // Italic formatting.
+      if ((match.startsWith("*") && match.endsWith("*")) || (match.startsWith("_") && match.endsWith("_"))) {
+        return { type: "italic", text: match.slice(1, -1) };
+      }
 
-  const patterns: string[] = [
-    `(\\*\\*[^*]+\\*\\*)`, // **bold**
-    `(__[^_]+__)`, // __bold__
-    `(\\*[^*]+\\*)`, // *italic*
-    `(_[^_]+_)`, // _italic_
-    `(~~[^~]+~~)`, // ~~strikethrough~~
-    `(~[^~]+~)`, // ~underline~
-  ];
-
-  if (escapedKeys.length > 0) {
-    patterns.push(`(?<=^|\\s|[^\\p{L}\\p{N}])(${escapedKeys.join("|")})(?:'s|'s)?(?=$|\\s|[^\\p{L}\\p{N}])`);
-  }
-
-  const combinedPattern = new RegExp(patterns.join("|"), "giu");
-
-  let lastIndex = 0;
-
-  for (const match of text.matchAll(combinedPattern)) {
-    const matchIndex = match.index!;
-    const fullMatch = match[0];
-
-    if (matchIndex > lastIndex) {
-      chunks.push({ type: "text", content: text.substring(lastIndex, matchIndex) });
-    }
-
-    const chunk = categorizeMatch(fullMatch, cardMap);
-    chunks.push(chunk);
-
-    lastIndex = matchIndex + fullMatch.length;
-  }
-
-  if (lastIndex < text.length) {
-    chunks.push({ type: "text", content: text.substring(lastIndex) });
-  }
-
-  return chunks;
-}
-
-function categorizeMatch(match: string, cardMap: Map<string, StoryCard>): TextChunk {
-  const currentSettings = get(settings);
-  if (currentSettings.highlightMarkdown) {
-    if ((match.startsWith("**") && match.endsWith("**")) || (match.startsWith("__") && match.endsWith("__"))) {
-      return { type: "bold", content: match.slice(2, -2) };
-    }
-
-    if (match.startsWith("~~") && match.endsWith("~~")) {
-      return { type: "strikethrough", content: match.slice(2, -2) };
-    }
-
-    if ((match.startsWith("*") && match.endsWith("*")) || (match.startsWith("_") && match.endsWith("_"))) {
-      return { type: "italic", content: match.slice(1, -1) };
-    }
-
-    if (match.startsWith("~") && match.endsWith("~")) {
-      return { type: "underline", content: match.slice(1, -1) };
-    }
-  }
-
-  const lookupMatch = match.replace(/('s|'s)$/, "");
-  const card = cardMap.get(lookupMatch.toLowerCase());
-  if (card) {
-    return { type: "card", card, content: match };
-  }
-
-  return { type: "text", content: match };
-}
-
-export function buildCardMap(cards: Record<string, StoryCard>): Map<string, StoryCard> {
-  const map = new Map<string, StoryCard>();
-
-  for (const card of Object.values(cards)) {
-    map.set(card.name.toLowerCase(), card);
-
-    if (card.triggers) {
-      const triggers = card.triggers.split(",").map((t) => t.trim().toLowerCase());
-      for (const trigger of triggers) {
-        if (trigger) {
-          map.set(trigger, card);
-        }
+      // Underline formatting.
+      if (match.startsWith("~") && match.endsWith("~")) {
+        return { type: "underline", text: match.slice(1, -1) };
       }
     }
+
+    // I don't really wanna document this.
+    // It grabs a card, what more do you want?
+    const lookupMatch = match.replace(/('s|'s)$/, "");
+    const card = map.get(lookupMatch.toLowerCase());
+    if (card) return { type: "card", visualCard: card, text: match };
+
+    // Default to text.
+    return { type: "text", text: match };
   }
 
-  return map;
+  /**
+   *
+   * @param text
+   * @returns
+   */
+  toChunks(text: string, pattern: RegExp, map: Map<string, VisualCard>, markdown: boolean = false): Chunk[] {
+    // If there is no text then return an empty array.
+    if (!text) return [];
+
+    // Create the initial chunks.
+    const chunks: Chunk[] = [];
+
+    // Now we can start parsing the text.
+    let lastIndex = 0;
+
+    // Get the current settings.
+    // Used to get the markdown setting.
+    const currentSettings = get(settings);
+
+    // Iterate over all matches in the text.
+    // Do stuff.
+    // Solve world hunger.
+    // Bring about world peace.
+    for (const match of text.matchAll(pattern)) {
+      const matchIndex = match.index!;
+      const fullMatch = match[0];
+
+      // Push a new text chunk.
+      if (matchIndex > lastIndex) chunks.push({ type: "text", text: text.substring(lastIndex, matchIndex) });
+
+      // Now categorize the match.
+      const chunk = this.#categorize(fullMatch, markdown, map);
+      chunks.push(chunk);
+
+      // Update the last index.
+      lastIndex = matchIndex + fullMatch.length;
+    }
+
+    if (lastIndex < text.length) {
+      chunks.push({ type: "text", text: text.substring(lastIndex) });
+    }
+
+    return chunks;
+  }
 }
+
+export const parser = new LEParser();

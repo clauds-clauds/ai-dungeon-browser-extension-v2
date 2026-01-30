@@ -1,156 +1,240 @@
-import { mount, unmount } from "svelte";
-import { Config } from "./config";
-import Response from "@/components/response.svelte";
-import { Debug } from "./debug";
-import { ResponseType } from "./types";
+// Imports here!
+import { mount } from "svelte";
+import { ActionType } from "./types";
+import Action from "@/components/ai_dungeon/action.svelte";
+import { isMobile } from "./hooks/is_mobile.svelte";
 
-export class DOM {
-  private static mountedComponents = new Map<HTMLElement, ReturnType<typeof mount>>();
+/**
+ * Empty for now...
+ */
+class LEDom {
+  addFonts(shadow: ShadowRoot) {
+    // Get the shadow head.
+    const head = shadow.querySelector("head");
+    if (!head) return;
 
-  static injectButton() {
-    if (document.getElementById(Config.ID_EDITOR_BUTTON)) return;
-    const baseButton = document.querySelector(Config.SELECTOR_EXIT_BUTTON);
-    if (!baseButton) return;
+    // Get font URLs.
+    const plexUrl = browser.runtime.getURL("/fonts/plex_sans.ttf");
+    const iconUrl = browser.runtime.getURL("/fonts/material_symbols.ttf");
 
+    // Create style thingy.
+    const fontStyle = document.createElement("style");
+    fontStyle.id = "le-font-style";
+
+    // Set content.
+    fontStyle.textContent = `
+        @font-face { font-family: 'LePlex Sans'; src: url('${plexUrl}') format('truetype'); }
+        @font-face { font-family: 'LeMaterial Symbols'; src: url('${iconUrl}') format('truetype'); font-variation-settings: "FILL" 1; }
+    `;
+
+    // Append to document head.
+    document.head.appendChild(fontStyle);
+
+    // Create another style for the shadow DOM.
+    const shadowStyle = document.createElement("style");
+    shadowStyle.textContent = `
+      body { all: initial; font-family: 'Le Plex Sans', sans-serif; color: #fff; }
+    `;
+
+    // Append to shadow head.
+    head.appendChild(shadowStyle);
+
+    // Finally, inject UnoCSS styles.
+    // I do not know if this is super safe, I'll have to debug that later.
+    // So far I haven't seen any issues.
+    this.#addUno();
+  }
+
+  #addUno() {
+    if (document.getElementById("le-uno-styles")) return;
+    const cssUrl = chrome.runtime.getURL("/content-scripts/content.css");
+    const link = document.createElement("link");
+    link.id = "le-uno-styles";
+    link.rel = "stylesheet";
+    link.href = cssUrl;
+    document.head.appendChild(link);
+  }
+
+  #addButton(id: string, icon: string, label: string, onclick?: () => void) {
+    if (document.getElementById(id)) return; // Button already exists.
+    const baseButton = query.exitButton(); // Find the exit button to anchor to.
+    if (!baseButton) return; // Exit button not found.
+
+    // Clone the exit button.
     const button = baseButton.cloneNode(true) as HTMLElement;
-    button.id = Config.ID_EDITOR_BUTTON;
-    (button.querySelector("p") as HTMLElement).innerText = "w_wrench";
-    (button.querySelector("span") as HTMLElement).innerText = "Editor";
-    button.addEventListener("click", (e) => {
-      extensionState.isEditorOpen = true;
+    button.id = id; // Set our ID thingy.
+    (button.querySelector("p") as HTMLElement).innerText = icon; // Set icon.
+    (button.querySelector("span") as HTMLElement).innerText = label; // Set label.
+    button.addEventListener("click", () => {
+      onclick?.();
+    }); // Add clicky stuff.
+    baseButton.parentElement?.insertBefore(button, baseButton); // Add to DOM.
+  }
+
+  addButtons() {
+    if (!isMobile.current) {
+      // Button for the custom image generation UI.
+      this.#addButton("le-image-editor-button", "w_image", "Image Gen", () => {
+        imageGenerationState.open = true;
+        debug.log(true, "You opened the image generation UI!");
+      });
+    }
+
+    // Button for the custom editor UI.
+    this.#addButton("le-editor-button", "w_wrench", "Editor", () => {
+      debug.log(true, "You opened the editor!");
+      editorState.open = true;
     });
+  }
+
+  addDevButton() {
+    if (document.getElementById("le-dev-button")) return; // Button already exists.
+    const baseButton = query.notificationsButton()?.parentElement; // Find the notifications button to base this on.
+    if (!baseButton) return; // Rewards button not found.
+
+    // Copy the parent element.
+    const button = baseButton.cloneNode(true) as HTMLElement;
+    button.id = "le-dev-button"; // Set our ID thingy again.
+    (button.querySelector("p") as HTMLElement).innerText = "w_open_book"; // Set icon.
+
+    // Insert it before the rewards button.
     baseButton.parentElement?.insertBefore(button, baseButton);
   }
 
-  static mountResponseOn(element: HTMLElement, type: ResponseType) {
-    // Check if the elemnt is already altered.
-    if (element.hasAttribute(Config.ATTRIBUTE_ALTERED)) return;
-
-    // Handling for the last actions:
-    if (type === ResponseType.LastAction) {
-      // The last action always has a span inside it with the actual text.
-      const original = element.firstElementChild as HTMLElement;
-
-      if (original) {
-        if (original.querySelector(".word-fade")) {
-          console.warn(
-            "[Dungeon Extension v2] Detected text animation... skipping for now... this might cause issues in the future.\n\nTo disable text animations navigate to: Gameplay > Appearance > Accessibility > Text Animation"
-          );
-          return;
-        }
-
-        // Clone the original first before hiding it.
-        const originalClone = original.cloneNode(true) as HTMLElement;
-        original.style.display = "none";
-
-        // Then we can mount our Svelte component.
-        const component = mount(Response, {
-          target: element,
-          anchor: original,
-          props: { rawHtml: originalClone.innerHTML, type: type },
-        });
-
-        this.mountedComponents.set(element, component);
-      }
-    }
-
-    // Story response types are very tricky. You can't simply hide the first child elements because they do not have any. They're just spans with text inside.
-    if (type === ResponseType.Story) {
-      const originalHtml = element.innerHTML; // Grab the inner HTML directly.
-      element.innerHTML = ""; // Clear the old unstyled stuff.
-      const component = mount(Response, {
-        target: element,
-        props: { rawHtml: originalHtml, type: type },
-      });
-      this.mountedComponents.set(element, component);
-    }
-
-    if (type === ResponseType.Action) {
-      const original = element.firstElementChild as HTMLElement;
-      if (original) {
-        // Clone the original first before hiding it.
-        const originalClone = original.cloneNode(true) as HTMLElement;
-        original.style.display = "none";
-        const component = mount(Response, {
-          target: element,
-          anchor: original,
-          props: { rawHtml: originalClone.innerHTML, type: type },
-        });
-        this.mountedComponents.set(element, component);
-      }
-    }
-
-    element.setAttribute(Config.ATTRIBUTE_ALTERED, "true");
+  /**
+   * Checks whether an element has already been prettified before.
+   * @param element The element to check.
+   * @returns Whether the element is marked as prettified.
+   */
+  isMarked(element: HTMLElement): boolean {
+    return element.getAttribute("data-le-marked") === "true";
   }
 
-  static isStoryContainer(element: HTMLElement): boolean {
-    return element instanceof HTMLSpanElement && element.getAttribute("aria-label")?.startsWith("Story section:") === true;
+  /**
+   * Clones the content of an element and hides the original so that React does not get angry with me.
+   * @param content The content to clone.
+   * @returns The cloned content.
+   */
+  cloneContent(content: HTMLElement): HTMLElement {
+    const clone = content.cloneNode(true) as HTMLElement;
+    content.style.display = "none";
+    return clone;
   }
 
-  static isAction(element: HTMLElement): boolean {
+  /**
+   * Checks if an element is a story section.
+   * @param element The element to check.
+   * @returns Whether the element is a story section, mind blown, right?
+   */
+  isStorySection(element: HTMLElement): boolean {
+    return element instanceof HTMLSpanElement && (element.getAttribute("aria-label")?.startsWith("Story section") ?? false);
+  }
+
+  /**
+   * Checks whether an element is an action element.
+   * @param element The element to check.
+   * @returns Whether the element is an action element.
+   */
+  isAction(element: HTMLElement): boolean {
     if (element.id !== "transition-opacity") return false;
     const childSpan = element.querySelector("span[aria-label]") as HTMLElement;
     return childSpan?.getAttribute("aria-label")?.startsWith("Action") === true;
   }
 
-  static prettifyButBetter(gameplayOutput: HTMLElement) {
-    // Grab the last child element, which is like often the most recent response.
-    const lastChild = gameplayOutput.lastElementChild;
+  /**
+   * Checks whether the `Text Animation` toggle is on, because if it is then we need to wait before prettifying.
+   * @param element The element to check for those flags.
+   * @returns Whether the element content is animated.
+   */
+  isAnimated(element: HTMLElement): boolean {
+    return element.querySelector(".word-fade") !== null;
+  }
 
-    // Return if there is no last child.
-    if (!lastChild) return;
+  /**
+   *
+   * @param element
+   * @param type
+   * @returns
+   */
+  mountActionOn(element: HTMLElement, type: ActionType) {
+    // Check if the action has already been prettified.
+    if (this.isMarked(element)) return;
 
-    // Okay, so I am gonna put some detailed comments here because my mind hurts with every AI Dungeon site update. Apparently there are now 3 distinct types of children, you either have the "Story Sections", "Actions", and sometimes the "Last Action" is outside of those two and other times it's inside a "Story Section". Really fun stuff.
-    // The "Story Section" are spans with an aria-label that starts with "Story section:", they contain multiple paragraphs and possibly the last action.
-    if (lastChild instanceof HTMLSpanElement && lastChild.getAttribute("aria-label")?.startsWith("Story section:")) {
-      // Debug.log("Last child is a story section!");
+    // Now do stuff based on the action type.
+    // I do not use a switch here because those things are ugly, yuckabees.
+    if (type === ActionType.Last) {
+      // Grab the first element.
+      const content = element.firstElementChild as HTMLElement;
 
-      // Now, sometimes the last action is inside this story section, so we need to find it.
-      const lastAction = lastChild.querySelector(Config.SELECTOR_LAST_ACTION) as HTMLElement;
-      if (lastAction) this.mountResponseOn(lastAction, ResponseType.LastAction);
+      // Return if there is no content.
+      if (!content) return;
 
-      // Besides last actions you also have previous story containers, which are spans inside the same section but they do not have a span child or any aria-label. Their ID is also: transition-opacity.
-      const storyContainers = lastChild.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
+      // Check if the text animation stuff is there, if so then we need to wait.
+      // Otherwise React will freak out and destroy the world or something.
+      if (this.isAnimated(content)) {
+        debug.warn(true, "Detected text animations, skipping stuff! Will try again later...");
+        return;
+      }
 
-      // Also paint those extra story containers.
-      storyContainers.forEach((container) => {
-        this.mountResponseOn(container as HTMLElement, ResponseType.Story);
-      });
+      // Now clone the content.
+      const clone = this.cloneContent(content);
 
-      // For the other rules, let's just paint the action before this story section if it exists.
-      const previousSibling = lastChild?.previousElementSibling as HTMLElement;
-      if (previousSibling) {
-        // Debug.log("The previous sibling is: " + previousSibling.outerHTML);
+      // Now mount our prettified action.
+      mount(Action, { target: element, anchor: content, props: { content: clone.innerHTML, type: ActionType.Last } });
+    }
 
-        // Paint the previous action, if there is one.
-        if (this.isAction(previousSibling)) {
-          // If it is an action then there is a third span with an aria-label starting with "Action".
-          const actionSpan = previousSibling.querySelector('span[aria-label^="Action"]') as HTMLElement;
+    // Story actions are tricky since they do not have a nice wrapper around them.
+    // So I just have to grab the text, and clear it out before mounting the prettified action.
+    if (type === ActionType.Story) {
+      const originalText = element.innerHTML;
+      element.innerHTML = ""; // Clear out the original text.
+      console.log("Original text:", originalText);
+      mount(Action, { target: element, props: { content: originalText, type: ActionType.Story } });
+    }
 
-          if (actionSpan) this.mountResponseOn(actionSpan, ResponseType.Action);
+    if (type === ActionType.Default) {
+      // Grab the first element.
+      const content = element.firstElementChild as HTMLElement;
+      if (!content) return;
+      // Now clone the content.
+      const clone = this.cloneContent(content);
+      // Now mount our prettified action.
+      mount(Action, { target: element, anchor: content, props: { content: clone.innerHTML, type: ActionType.Default } });
+    }
+
+    // Print success message.
+    debug.success(true, "An action was successfully prettified!");
+
+    // Mark the element as prettified.
+    // If this is removed then React will get angry again, very, very much.
+    element.setAttribute("data-le-marked", "true");
+  }
+
+  prettify(output: HTMLElement, lookback: number = 5) {
+    if (!output) return;
+
+    const children = Array.from(output.children) as HTMLElement[];
+    const nodes = children.slice(-lookback);
+
+    nodes.forEach((node) => {
+      if (this.isStorySection(node)) {
+        const storyActions = node.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
+        storyActions.forEach((action) => {
+          this.mountActionOn(action as HTMLElement, ActionType.Story);
+        });
+
+        const lastAction = query.lastAction(node);
+        if (lastAction) {
+          this.mountActionOn(lastAction, ActionType.Last);
+        }
+      } else {
+        const actionSpan = node.querySelector('span[aria-label^="Action"]') as HTMLElement;
+        if (actionSpan) {
+          this.mountActionOn(actionSpan, ActionType.Default);
         }
       }
-
-      // Now also check the second last child, in case there is another story section before this one.
-      const secondLastChild = previousSibling?.previousElementSibling as HTMLElement;
-      if (secondLastChild && this.isStoryContainer(secondLastChild)) {
-        // Debug.log("Second last child is also a story section!");
-        const storyContainers = secondLastChild.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
-
-        // Also paint those extra story containers.
-        storyContainers.forEach((container) => {
-          this.mountResponseOn(container as HTMLElement, ResponseType.Story);
-        });
-      }
-    }
-
-    // Debug.log("Last Child HTML: " + lastChild.outerHTML);
-  }
-
-  static cleanup() {
-    for (const [element, component] of this.mountedComponents.entries()) {
-      unmount(component);
-    }
-    this.mountedComponents.clear();
+    });
   }
 }
+
+export const dom = new LEDom();

@@ -1,29 +1,63 @@
 <script lang="ts">
-  import { Slider } from "bits-ui";
+  import { Separator, Slider } from "bits-ui";
 
-  type Props = {
-    value: number;
-    min?: number;
-    max?: number;
-    step?: number;
-  };
+  type Props = { value: number; min?: number; max?: number; reset?: number; step?: number };
+  let { value = $bindable(), min = 0, max = 100, reset = 50, step = 1 }: Props = $props();
 
-  let { value = $bindable(), min = 0, max = 100, step }: Props = $props();
+  // svelte-ignore state_referenced_locally
+  let resettable = $state<boolean>(value !== reset);
 </script>
 
-<div class="flex flex-row gap-2 justify-center place-items-center w-full">
-  <input
-    type="number"
-    bind:value
-    class="aspect-square w-11 h-11 bg-theme-neutral-100 rounded-xl outline-0 justify-center place-items-center [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none [-moz-appearance:textfield] text-center"
-  />
-  <Slider.Root type="single" bind:value {min} {max} {step} class="relative flex w-full touch-none select-none items-center">
-    <span class="bg-theme-neutral-100 relative h-2 w-full grow cursor-pointer overflow-hidden rounded-full">
-      <Slider.Range class="bg-pretty-theme absolute h-full" />
-    </span>
-    <Slider.Thumb
-      index={0}
-      class="bg-theme-neutral-900 hover:bg-pretty-theme focus-visible:ring-foreground  data-active:border-dark-40 focus-visible:outline-hidden data-active:scale-[0.98] block size-6.25 cursor-pointer rounded-full border-4 shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+<div class="flex flex-col w-full h-fit gap-4">
+  <div class="flex flex-row gap-2 justify-between">
+    <input
+      bind:value
+      onchange={() => {
+        resettable = value !== reset;
+      }}
+      type="number"
+      class="outline-0 w-48px text-sm rounded-lg border-2px p-x-1 border-transparent hover:border-surface-out focus:border-pretty-brand attention"
     />
+    <button
+      class="text-sm text-pretty-brand cursor-pointer attention"
+      onclick={() => {
+        value = reset;
+        resettable = false;
+      }}
+    >
+      {#if resettable}
+        RESET ({reset})
+      {/if}
+    </button>
+  </div>
+  <Slider.Root
+    type="single"
+    bind:value
+    {min}
+    {max}
+    {step}
+    onValueCommit={() => {
+      resettable = value !== reset;
+    }}
+    class="relative flex w-full touch-none select-none attention items-center m-b-4"
+  >
+    <span class="bg-mono-0 relative h-4px w-full cursor-pointer overflow-hidden rounded-full">
+      <Slider.Range class="bg-pretty-brand absolute h-full" />
+    </span>
+    <Slider.Thumb index={0} class="bg-mono-900 block size-6 cursor-pointer rounded-full transition" />
   </Slider.Root>
 </div>
+
+<!-- I really do not like using style elements anymore, but it is required to remove the spinners -->
+<style>
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type="number"] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+</style>

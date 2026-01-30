@@ -1,56 +1,70 @@
-export enum Tab {
-  Adventure = "Adventure",
-  Settings = "Settings",
-  Developer = "Developer",
-  StoryCard = "StoryCard",
-}
-
-export type AudioClip = {
-  id: string;
-  name: string;
-  size: number;
-  duration: number;
-  data: string;
+/**
+ *
+ */
+export type Pill = {
+  icon: string;
+  label: string;
+  extra?: string;
+  disabled?: boolean;
 };
 
-export type StoryCard = {
-  id: string;
+export type Track = {
   name: string;
-  triggers: string;
-  type: string;
-  icons: string[];
-  iconIndex: number;
-  graphics: string[];
-  graphicIndex: number;
-  useCustomColor: boolean;
-  color: string;
-  limit: string;
-  preset: string;
-  audioClips: string[];
+  data: string[];
 };
+
+/**
+ * The different chunk types for action parsing.
+ * - `text:` Standard text.
+ * - `bold:` Bold text.
+ * - `italic:` Italic text.
+ * - `underline:` Underlined text.
+ * - `strikethrough:` Strikethrough text.
+ */
+export type Chunk =
+  | { type: "text"; text: string }
+  | { type: "bold"; text: string }
+  | { type: "italic"; text: string }
+  | { type: "underline"; text: string }
+  | { type: "strikethrough"; text: string }
+  | { type: "card"; visualCard: VisualCard; text: string };
 
 export type Adventure = {
-  id: string;
   name: string;
-  createdAt: number;
-  storyCards: Record<string, StoryCard>;
+  visualCards: VisualCard[];
 };
 
-export type TextChunk =
-  | { type: "text"; content: string }
-  | { type: "bold"; content: string }
-  | { type: "italic"; content: string }
-  | { type: "underline"; content: string }
-  | { type: "strikethrough"; content: string }
-  | { type: "card"; card: StoryCard; content: string };
+export type VisualCard = {
+  id: string;
+  name: string;
+  type: string;
+  entry: string;
+  triggers: string;
+  notes: string;
+  icons: string[];
+  icon: number;
+  graphics: string[];
+  graphic: number;
+  color: string;
+  limit: "story" | "action" | "protagonist" | "none";
+};
 
-export enum ResponseType {
-  LastAction = "LastAction",
-  Action = "Action",
-  Story = "Story",
+/**
+ * `ActionType` has all the different response types for AI Dungeon.
+ * - `Default:` A standard user action.
+ * - `Story:` A story action (either user or AI).
+ * - `Last:` The last action returned by the AI.
+ */
+export enum ActionType {
+  Default,
+  Story,
+  Last,
 }
 
-export enum ContainerType {
-  StorySection = "StorySection",
-  Action = "Action",
-}
+/**
+ * A simple 2D vector type.
+ */
+export type Vector2 = {
+  x: number;
+  y: number;
+};

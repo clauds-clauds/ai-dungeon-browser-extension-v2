@@ -63,8 +63,8 @@ class LEDom {
     // Clone the exit button.
     const button = baseButton.cloneNode(true) as HTMLElement;
     button.id = id; // Set our ID thingy.
-    (button.querySelector("p") as HTMLElement).innerText = icon; // Set icon.
-    (button.querySelector("span") as HTMLElement).innerText = label; // Set label.
+    (button.querySelector("div > span") as HTMLElement).innerText = icon; // Set icon.
+    (button.querySelector(":scope > span") as HTMLElement).innerText = label; // Set label.
     button.addEventListener("click", () => {
       onclick?.();
     }); // Add clicky stuff.

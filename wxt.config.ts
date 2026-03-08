@@ -7,7 +7,7 @@ export default defineConfig({
   manifest: {
     name: "Dungeon Extension V3",
     description: "Customize your AI Dungeon experience with fancy colors, icons and more!",
-    version: "0.1.0",
+    version: "0.1.2",
     permissions: ["storage", "unlimitedStorage"],
     web_accessible_resources: [
       {

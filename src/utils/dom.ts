@@ -93,58 +93,33 @@ export class DOM {
     return childSpan?.getAttribute("aria-label")?.startsWith("Action") === true;
   }
 
-  static prettifyButBetter(gameplayOutput: HTMLElement) {
-    // Grab the last child element, which is like often the most recent response.
-    const lastChild = gameplayOutput.lastElementChild;
+static prettifyButBetter(gameplayOutput: HTMLElement) {
+    // 1. Find all relevant elements, piercing through any Alpha <div> wrappers
+    const allLastActions = Array.from(gameplayOutput.querySelectorAll<HTMLElement>(Config.SELECTOR_LAST_ACTION));
+    
+    // Filter out standard actions so they don't overlap with Last Actions
+    const allActions = Array.from(gameplayOutput.querySelectorAll<HTMLElement>('span[aria-label^="Action"]'))
+      .filter(el => !el.getAttribute("aria-label")?.startsWith("Last action"));
+      
+    const allStorySections = Array.from(gameplayOutput.querySelectorAll<HTMLElement>('span[aria-label^="Story section:"]'));
 
-    // Return if there is no last child.
-    if (!lastChild) return;
+    // 2. Apply formatting ONLY to the 2 most recent elements of each type.
+    // This perfectly mimics the original extension's memory footprint and prevents scroll-jumping.
 
-    // Okay, so I am gonna put some detailed comments here because my mind hurts with every AI Dungeon site update. Apparently there are now 3 distinct types of children, you either have the "Story Sections", "Actions", and sometimes the "Last Action" is outside of those two and other times it's inside a "Story Section". Really fun stuff.
-    // The "Story Section" are spans with an aria-label that starts with "Story section:", they contain multiple paragraphs and possibly the last action.
-    if (lastChild instanceof HTMLSpanElement && lastChild.getAttribute("aria-label")?.startsWith("Story section:")) {
-      // Debug.log("Last child is a story section!");
+    allLastActions.slice(-2).forEach(el => {
+      this.mountResponseOn(el, ResponseType.LastAction);
+    });
 
-      // Now, sometimes the last action is inside this story section, so we need to find it.
-      const lastAction = lastChild.querySelector(Config.SELECTOR_LAST_ACTION) as HTMLElement;
-      if (lastAction) this.mountResponseOn(lastAction, ResponseType.LastAction);
+    allActions.slice(-2).forEach(el => {
+      this.mountResponseOn(el, ResponseType.Action);
+    });
 
-      // Besides last actions you also have previous story containers, which are spans inside the same section but they do not have a span child or any aria-label. Their ID is also: transition-opacity.
-      const storyContainers = lastChild.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
-
-      // Also paint those extra story containers.
-      storyContainers.forEach((container) => {
-        this.mountResponseOn(container as HTMLElement, ResponseType.Story);
+    allStorySections.slice(-2).forEach(section => {
+      const storyContainers = section.querySelectorAll<HTMLElement>("span#transition-opacity:not([aria-label]):not(:has(span))");
+      storyContainers.forEach(container => {
+        this.mountResponseOn(container, ResponseType.Story);
       });
-
-      // For the other rules, let's just paint the action before this story section if it exists.
-      const previousSibling = lastChild?.previousElementSibling as HTMLElement;
-      if (previousSibling) {
-        // Debug.log("The previous sibling is: " + previousSibling.outerHTML);
-
-        // Paint the previous action, if there is one.
-        if (this.isAction(previousSibling)) {
-          // If it is an action then there is a third span with an aria-label starting with "Action".
-          const actionSpan = previousSibling.querySelector('span[aria-label^="Action"]') as HTMLElement;
-
-          if (actionSpan) this.mountResponseOn(actionSpan, ResponseType.Action);
-        }
-      }
-
-      // Now also check the second last child, in case there is another story section before this one.
-      const secondLastChild = previousSibling?.previousElementSibling as HTMLElement;
-      if (secondLastChild && this.isStoryContainer(secondLastChild)) {
-        // Debug.log("Second last child is also a story section!");
-        const storyContainers = secondLastChild.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
-
-        // Also paint those extra story containers.
-        storyContainers.forEach((container) => {
-          this.mountResponseOn(container as HTMLElement, ResponseType.Story);
-        });
-      }
-    }
-
-    // Debug.log("Last Child HTML: " + lastChild.outerHTML);
+    });
   }
 
   static cleanup() {

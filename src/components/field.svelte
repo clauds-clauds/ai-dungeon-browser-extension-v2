@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Tooltip } from "bits-ui";
+  import DOMPurify from "dompurify";
 
   type Props = {
     label: string;
@@ -8,6 +9,10 @@
   };
 
   let { label, info, children }: Props = $props();
+
+  // `info` is developer-authored and may contain simple formatting HTML (<b>, <br>, <code>...).
+  // Sanitize before rendering so this {@html} sink stays safe if `info` ever becomes dynamic.
+  let safeInfo = $derived(info ? DOMPurify.sanitize(info) : "");
 </script>
 
 <Tooltip.Provider>
@@ -22,7 +27,7 @@
     >
       {#if info}
         <div class="bg-theme-neutral-100 shadow-popover outline-hidden z-0 block text-start p-4 text-sm font-medium rounded-xl">
-          {@html info}
+          {@html safeInfo}
         </div>
       {/if}
     </Tooltip.Content>

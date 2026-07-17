@@ -1,7 +1,6 @@
 import { mount, unmount } from "svelte";
 import { Config } from "./config";
 import Response from "@/components/response.svelte";
-import { Debug } from "./debug";
 import { ResponseType } from "./types";
 
 export class DOM {
@@ -83,68 +82,46 @@ export class DOM {
     element.setAttribute(Config.ATTRIBUTE_ALTERED, "true");
   }
 
-  static isStoryContainer(element: HTMLElement): boolean {
-    return element instanceof HTMLSpanElement && element.getAttribute("aria-label")?.startsWith("Story section:") === true;
-  }
-
-  static isAction(element: HTMLElement): boolean {
-    if (element.id !== "transition-opacity") return false;
-    const childSpan = element.querySelector("span[aria-label]") as HTMLElement;
-    return childSpan?.getAttribute("aria-label")?.startsWith("Action") === true;
-  }
-
   static prettifyButBetter(gameplayOutput: HTMLElement) {
-    // Grab the last child element, which is like often the most recent response.
-    const lastChild = gameplayOutput.lastElementChild;
+    // AI Dungeon keeps restructuring the gameplay DOM (extra wrapper divs, per-section wrappers,
+    // moved aria-labels...), so we no longer rely on a fixed parent/sibling shape. Every piece of
+    // renderable text (story paragraphs, the last action, and player actions) lives in a
+    // "span#transition-opacity" element that has an element first child holding the actual text.
+    // We simply find all of them anywhere under #gameplay-output and mount on each. mountResponseOn
+    // is idempotent (guarded by ATTRIBUTE_ALTERED), so re-running on every mutation is safe and cheap.
 
-    // Return if there is no last child.
-    if (!lastChild) return;
+    // AI Dungeon virtualizes the story list: older sections get removed from the DOM as you scroll.
+    // Drop any component whose element is no longer connected before mounting the current ones.
+    this.pruneDetached();
 
-    // Okay, so I am gonna put some detailed comments here because my mind hurts with every AI Dungeon site update. Apparently there are now 3 distinct types of children, you either have the "Story Sections", "Actions", and sometimes the "Last Action" is outside of those two and other times it's inside a "Story Section". Really fun stuff.
-    // The "Story Section" are spans with an aria-label that starts with "Story section:", they contain multiple paragraphs and possibly the last action.
-    if (lastChild instanceof HTMLSpanElement && lastChild.getAttribute("aria-label")?.startsWith("Story section:")) {
-      // Debug.log("Last child is a story section!");
+    const containers = gameplayOutput.querySelectorAll<HTMLElement>(Config.SELECTOR_RESPONSE);
 
-      // Now, sometimes the last action is inside this story section, so we need to find it.
-      const lastAction = lastChild.querySelector(Config.SELECTOR_LAST_ACTION) as HTMLElement;
-      if (lastAction) this.mountResponseOn(lastAction, ResponseType.LastAction);
+    containers.forEach((container) => {
+      // Must have an element first child; that inner span is what mountResponseOn hides & renders.
+      if (!container.firstElementChild) return;
 
-      // Besides last actions you also have previous story containers, which are spans inside the same section but they do not have a span child or any aria-label. Their ID is also: transition-opacity.
-      const storyContainers = lastChild.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
+      const ariaLabel = container.getAttribute("aria-label") ?? "";
 
-      // Also paint those extra story containers.
-      storyContainers.forEach((container) => {
-        this.mountResponseOn(container as HTMLElement, ResponseType.Story);
-      });
+      // The newest response is the "Last action:" one. It needs the LastAction type so the <Focus>
+      // component renders above it. Everything else (older story paragraphs and player actions)
+      // uses the Action type, which is the same non-destructive clone-and-hide mount path.
+      const type = ariaLabel.startsWith("Last action:") ? ResponseType.LastAction : ResponseType.Action;
 
-      // For the other rules, let's just paint the action before this story section if it exists.
-      const previousSibling = lastChild?.previousElementSibling as HTMLElement;
-      if (previousSibling) {
-        // Debug.log("The previous sibling is: " + previousSibling.outerHTML);
+      this.mountResponseOn(container, type);
+    });
+  }
 
-        // Paint the previous action, if there is one.
-        if (this.isAction(previousSibling)) {
-          // If it is an action then there is a third span with an aria-label starting with "Action".
-          const actionSpan = previousSibling.querySelector('span[aria-label^="Action"]') as HTMLElement;
-
-          if (actionSpan) this.mountResponseOn(actionSpan, ResponseType.Action);
-        }
-      }
-
-      // Now also check the second last child, in case there is another story section before this one.
-      const secondLastChild = previousSibling?.previousElementSibling as HTMLElement;
-      if (secondLastChild && this.isStoryContainer(secondLastChild)) {
-        // Debug.log("Second last child is also a story section!");
-        const storyContainers = secondLastChild.querySelectorAll("span#transition-opacity:not([aria-label]):not(:has(span))");
-
-        // Also paint those extra story containers.
-        storyContainers.forEach((container) => {
-          this.mountResponseOn(container as HTMLElement, ResponseType.Story);
-        });
-      }
+  // Unmounts and drops any tracked component whose element has been detached from the document
+  // (e.g. AI Dungeon virtualized away an old story section). Prevents a session-long memory leak
+  // of detached DOM nodes and their Svelte components.
+  static pruneDetached() {
+    for (const [element, component] of this.mountedComponents.entries()) {
+      if (element.isConnected) continue;
+      unmount(component);
+      // Clear the altered marker so this node is re-mounted cleanly if it ever reconnects.
+      element.removeAttribute(Config.ATTRIBUTE_ALTERED);
+      this.mountedComponents.delete(element);
     }
-
-    // Debug.log("Last Child HTML: " + lastChild.outerHTML);
   }
 
   static cleanup() {
